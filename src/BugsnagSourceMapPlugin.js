@@ -11,12 +11,14 @@ class BugsnagSourceMapPlugin {
     appVersion = null,
     silent = false,
     overwrite = false,
+    uploadSource = false,
   }) {
     this.apiKey = apiKey;
     this.publicPath = publicPath;
     this.appVersion = appVersion;
     this.silent = silent;
     this.overwrite = overwrite;
+    this.uploadSource = uploadSource;
   }
 
   apply(compiler) {
@@ -58,6 +60,7 @@ class BugsnagSourceMapPlugin {
   uploadSourceMap(sourceFile, sourceMap, compilation) {
     const minifiedUrl = `${this.publicPath}/${sourceFile}`;
     const sourceMapPath = compilation.assets[sourceMap].existsAt;
+    const sourceFilePath = compilation.assets[sourceFile].existsAt;
     const options = {
       apiKey: this.apiKey,
       minifiedUrl,
@@ -66,22 +69,27 @@ class BugsnagSourceMapPlugin {
     if (this.overwrite === true) { options.overwrite = true; }
     if (this.appVersion !== null) { options.appVersion = this.appVersion; }
 
-    superagent.post(BUGSNAG_ENDPOINT)
-              .field(options)
-              .attach('sourceMap', sourceMapPath)
-              .end((err) => {
-                if (err) {
-                  if (!this.silent) {
-                    if (err.response && err.response.text) {
-                      throw `BugsnagSourceMapPlugin Error: ${err.response.text}`;
-                    } else {
-                      throw err;
-                    }
-                  } else {
-                    console.log('BugsnagSourceMapPlugin Warning: ', err.response.text);
-                  }
-                }
-              });
+    const request = superagent.post(BUGSNAG_ENDPOINT)
+      .field(options)
+      .attach('sourceMap', sourceMapPath)
+
+    if (this.uploadSource === true) {
+      request.attach('minifiedFile', sourceFilePath);
+    }
+
+    request.end((err) => {
+      if (err) {
+        if (!this.silent) {
+          if (err.response && err.response.text) {
+            throw `BugsnagSourceMapPlugin Error: ${err.response.text}`;
+          } else {
+            throw err;
+          }
+        } else {
+          console.log('BugsnagSourceMapPlugin Warning: ', err.response.text);
+        }
+      }
+    });
   }
 }
 
